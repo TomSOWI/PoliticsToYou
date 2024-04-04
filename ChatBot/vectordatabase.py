@@ -13,7 +13,10 @@ import os
 #Load environmental variables from .env-file
 #load_dotenv()
 
+
+# Load documents to create a vectorstore later
 def load_documents(index_name):
+    # To Do: Create one initial vectore store loading all the documents with this function
     loader = CSVLoader(index_name, source_column="speech_content") #unprocessed csv file
     #loader = DataFrameLoader(data_frame=df, page_content_column='speech_content') #df
     data = loader.load()
@@ -26,39 +29,25 @@ def load_documents(index_name):
     documents = splitter.split_documents(documents=data)
     return documents
 
-def get_vectorstore(documents, embeddings, index_name): 
-    if embeddings == None:
-        embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
-    db = FAISS.from_documents(documents, embeddings)
-    db.save_local(folder_path="./vector_store", index_name=index_name)
+def get_vectorstore(embeddings, folder_path, index_name): 
+    path = folder_path + "/" + index_name
+    print(path)
+    # To Do: Dynamicly update and merge verctorstores
+    #if os.path.exists(path):
+    db = FAISS.load_local(folder_path=folder_path, index_name=index_name,
+                                            embeddings=embeddings, allow_dangerous_deserialization=True)
+    #else:
+        #db = FAISS.from_documents(documents, embeddings)
+        #db.save_local(folder_path=folder_path, index_name=index_name)
+        #pass
     return db
 
-def RAG(llm, prompt, db, question):
-    if llm == None:
-        llm = HuggingFaceHub(
-            repo_id="mistralai/Mixtral-8x7B-Instruct-v0.1",
-            task="text-generation",
-            model_kwargs={
-                "max_new_tokens": 512,
-                "top_k": 30,
-                "temperature": 0.1,
-                "repetition_penalty": 1.03,
-            }
-        )
-
-    if prompt == None:
-        prompt = ChatPromptTemplate.from_template("""Beantworte die folgende Frage auf deutsch und nur auf der Grundlage des angegebenen Kontexts:
-
-        <context>
-        {context}
-        </context>
-
-        Question: {input}
-        Gebe nur die Antwort auf die Queston zurück""")
-       
+# Apply RAG by providing the context and the question to the LLM using the predefined template
+def RAG(llm, prompt, db, question):       
     document_chain = create_stuff_documents_chain(llm=llm, prompt=prompt)
     retriever = db.as_retriever()
     retrieval_chain = create_retrieval_chain(retriever, document_chain)
 
     response = retrieval_chain.invoke({"input": question})
     return response
+

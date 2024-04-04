@@ -1,38 +1,55 @@
-import pandas as pd
-
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.llms import Ollama
-from langchain_community.vectorstores import FAISS
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
+from langchain_community.llms.huggingface_hub import HuggingFaceHub
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
-llm = Ollama(model="llama2")
-embeddings = OllamaEmbeddings()
+from vectordatabase import RAG, get_vectorstore
+import pandas as pd
+import os
+from dotenv import load_dotenv, find_dotenv
 
-df = pd.read_pickle("speeches.pkl")
-docs = df['speech_content'].to_list()[:100]
+#Load environmental variables from .env-file
+load_dotenv(find_dotenv())
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = os.getenv("HUGGINGACEHUB_API_TOKEN")
 
 
+embeddings = HuggingFaceEmbeddings(model_name="paraphrase-multilingual-MiniLM-L12-v2")
+llm = HuggingFaceHub(
+    repo_id="mistralai/Mixtral-8x7B-Instruct-v0.1",
+    task="text-generation",
+    model_kwargs={
+        "max_new_tokens": 512,
+        "top_k": 30,
+        "temperature": 0.1,
+        "repetition_penalty": 1.03,
+        }
+)
+# To Do: Experiment with different templates replying in german or english depending on the input language
+prompt1 = ChatPromptTemplate.from_template("""<s>[INST] 
+                    Instruction: Beantworte die folgende Frage auf deutsch und nur auf der Grundlage des angegebenen Kontexts:
 
-text_splitter = RecursiveCharacterTextSplitter()
-documents = text_splitter.split_documents(docs)
-vector = FAISS.from_documents(documents, embeddings)
+                    Context: {context}
 
-prompt = ChatPromptTemplate.from_template("""Answer the following question based only on the provided context:
+                    Question: {input}  
+                    [/INST]"""
+                    # Returns the answer in Emglish!?
+) 
 
-<context>
-{context}
-</context>
+prompt2 = ChatPromptTemplate.from_template("""Beantworte die folgende Frage auf deutsch und nur auf der Grundlage des angegebenen Kontexts:
 
-Question: {input}""")
+        <context>
+        {context}
+        </context>
 
-document_chain = create_stuff_documents_chain(llm, prompt)
-retriever = vector.as_retriever()
-retrieval_chain = create_retrieval_chain(retriever, document_chain)
+        Question: {input}
+        Gebe nur die Antwort auf die Queston zurück""")
 
-response = retrieval_chain.invoke({"input": "What is the CDU?"})
-print(response["answer"])
+ 
+folder_path = "./vector_store"
+index_name = "legislature20"
+db = get_vectorstore(embeddings=embeddings, folder_path=folder_path, index_name=index_name)
 
-# LangSmith offers several features that can help with testing:...
+def chatbot(message, history, db=db, llm=llm, prompt=prompt2):
+    raw_response = RAG(llm=llm, prompt=prompt, db=db, question=message)
+    response = raw_response['answer'].split("Antwort: ")[1]
+    return response  
