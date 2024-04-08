@@ -32,7 +32,7 @@ prompt1 = ChatPromptTemplate.from_template("""<s>[INST]
 
                     Question: {input}  
                     [/INST]"""
-                    # Returns the answer in Emglish!?
+                    # Returns the answer in English!?
 ) 
 
 prompt2 = ChatPromptTemplate.from_template("""Beantworte die folgende Frage auf deutsch und nur auf der Grundlage des angegebenen Kontexts:
@@ -42,7 +42,9 @@ prompt2 = ChatPromptTemplate.from_template("""Beantworte die folgende Frage auf 
         </context>
 
         Question: {input}
-        Gebe nur die Antwort auf die Queston zurück""")
+        Gebe nur die Antwort auf die Question zurück"""
+        # Returns the answer in German
+)
 
  
 folder_path = "./vector_store"
@@ -53,3 +55,22 @@ def chatbot(message, history, db=db, llm=llm, prompt=prompt2):
     raw_response = RAG(llm=llm, prompt=prompt, db=db, question=message)
     response = raw_response['answer'].split("Antwort: ")[1]
     return response  
+
+# Retrieve speech contents based on keywords
+def keyword_search(query, db=db, embeddings=embeddings):
+    query_embedding = embeddings.embed_query(query)
+    results =  db.max_marginal_relevance_search_with_score_by_vector(query_embedding)
+    # Format vector store query results into dataframe
+    #print(results[0][0].metadata.keys())
+    
+    df_res = pd.DataFrame(columns=['Speech Content', 'Relevance']) # Add Date/Party/Politician
+    for doc in results:
+        speech_content = doc[0].page_content
+        #speech_date = doc[0].metadata["date"]
+        score = doc[1] # Relevance based on relevance search
+        df_res = pd.concat([df_res, pd.DataFrame({'Speech Content': [speech_content],
+                                                          #'Date': [speech_date],
+                                                          'Relevance': [score]})], ignore_index=True)
+    
+    df_res.sort_values('Relevance', inplace=True)
+    return df_res
