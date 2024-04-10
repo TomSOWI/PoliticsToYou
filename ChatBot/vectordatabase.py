@@ -1,4 +1,4 @@
-from langchain_community.document_loaders import CSVLoader
+from langchain_community.document_loaders import DataFrameLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_community.vectorstores import FAISS
@@ -15,10 +15,10 @@ import os
 
 
 # Load documents to create a vectorstore later
-def load_documents(index_name):
+def load_documents(df):
     # To Do: Create one initial vectore store loading all the documents with this function
-    loader = CSVLoader(index_name, source_column="speech_content") #unprocessed csv file
-    #loader = DataFrameLoader(data_frame=df, page_content_column='speech_content') #df
+    #loader = CSVLoader(index_name, source_column="speech_content") #unprocessed csv file
+    loader = DataFrameLoader(data_frame=df, page_content_column='speech_content') #df
     data = loader.load()
     splitter = RecursiveCharacterTextSplitter(
             chunk_size=1024,
